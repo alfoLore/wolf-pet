@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Activity, AlertCircle, PlusCircle, ShieldAlert, Heart } from 'lucide-react';
+import { Mascota, RegistroDiario } from '@/types/database';
 
 export default function Home() {
-  const [mascota, setMascota] = useState<any>(null);
-  const [registros, setRegistros] = useState<any[]>([]);
+  const [mascota, setMascota] = useState<Mascota | null>(null);
+  const [registros, setRegistros] = useState<RegistroDiario[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Estado del formulario diario
@@ -19,24 +20,32 @@ export default function Home() {
   // Cargar datos de Anita y sus registros
   const cargarDatos = async () => {
     setLoading(true);
-    
+
     // 1. Obtener datos de Anita
-    const { data: pet } = await supabase
+    const { data: pet, error: petError } = await supabase
       .from('mascotas')
       .select('*')
       .eq('nombre_actual', 'Anita')
       .single();
 
+    if (petError) {
+      console.error('Error al obtener la mascota:', petError.message);
+    }
+
     if (pet) {
-      setMascota(pet);
+      setMascota(pet as Mascota);
       // 2. Obtener historial diario
-      const { data: logs } = await supabase
+      const { data: logs, error: logsError } = await supabase
         .from('registros_diarios')
         .select('*')
         .eq('mascota_id', pet.id)
-        .order('fecha', { ascending: false });
-      
-      setRegistros(logs || []);
+        .order('created_at', { ascending: false });
+
+      if (logsError) {
+        console.error('Error al obtener registros:', logsError.message);
+      }
+
+      setRegistros((logs as RegistroDiario[]) || []);
     }
     setLoading(false);
   };
@@ -63,9 +72,14 @@ export default function Home() {
     ]);
 
     if (!error) {
+      setRacionManana(false);
+      setRacionTarde(false);
+      setConsistenciaHeces('normal');
       setDescripcionMalestar('');
       setTuvoMalestar(false);
       cargarDatos();
+    } else {
+      console.error('Error al guardar registro:', error.message);
     }
   };
 
@@ -106,12 +120,14 @@ export default function Home() {
           </div>
 
           {/* BANNER ALERTA */}
-          <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-xl text-xs text-amber-900 flex items-start gap-2">
-            <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold">Advertencias Médicas:</span> {mascota.alergias_medicamentos_adversos}
+          {mascota.alergias_medicamentos_adversos && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-xl text-xs text-amber-900 flex items-start gap-2">
+              <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Advertencias Médicas:</span> {mascota.alergias_medicamentos_adversos}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -203,7 +219,7 @@ export default function Home() {
           {registros.map((reg) => (
             <div key={reg.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/60 space-y-2">
               <div className="flex justify-between items-center text-xs text-slate-500">
-                <span>Fecha: <b>{new Date(reg.fecha).toLocaleDateString()}</b></span>
+                <span>Fecha: <b>{reg.created_at ? new Date(reg.created_at).toLocaleDateString('es-AR') : new Date(reg.fecha).toLocaleDateString('es-AR')}</b></span>
                 <span className="capitalize bg-slate-200 px-2 py-0.5 rounded font-medium text-slate-700">{reg.tipo_autor}</span>
               </div>
               <div className="flex flex-wrap gap-4 text-xs font-medium text-slate-700">
